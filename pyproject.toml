@@ -1,0 +1,29 @@
+[project]
+name = "beats-cli"
+version = "0.1.0"
+description = "Audio analysis CLI - detects BPM, key, genre, mood and writes ID3 tags"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "essentia",
+    "essentia-tensorflow",
+    "mutagen",
+    "typer",
+    "rich",
+    "pywebview",
+    "pyobjc-framework-Cocoa",
+    "pyobjc-framework-WebKit",
+]
+
+[project.optional-dependencies]
+# Leeres Extra: ältere Anleitungen mit ``pip install -e ".[ml]"`` bleiben gültig.
+ml = []
+# macOS-Arm-Wheels ohne TensorflowPredict*: Genre/Mood über pip-TensorFlow (siehe analyzer.tf_ml_fallback_ready).
+tf_fallback = ["tensorflow>=2.16,<2.30"]
+build = ["pyinstaller"]
+
+[project.scripts]
+beats-cli = "beats_cli.main:app"
+
+[tool.setuptools.package-data]
+beats_cli = ["*.html"]

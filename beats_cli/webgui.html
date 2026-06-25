@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beat Analyzer by David Main</title>
+<style>
+  :root, [data-theme="light"] {
+    --bg: #f5f5f7;
+    --surface: #ffffff;
+    --surface-2: #e8e8ed;
+    --border: #d2d2d7;
+    --text: #1d1d1f;
+    --muted: #86868b;
+    --accent: #007aff;
+    --accent-dim: #0066d6;
+    --accent-glow: rgba(0, 122, 255, 0.1);
+    --accent-text: #ffffff;
+    --red: #ff3b30;
+    --red-dim: rgba(255, 59, 48, 0.1);
+  }
+  [data-theme="dark"] {
+    --bg: #1d1d1f;
+    --surface: #2c2c2e;
+    --surface-2: #3a3a3c;
+    --border: #48484a;
+    --text: #f5f5f7;
+    --muted: #98989d;
+    --accent: #0a84ff;
+    --accent-dim: #0a84ff;
+    --accent-glow: rgba(10, 132, 255, 0.15);
+    --accent-text: #ffffff;
+    --red: #ff453a;
+    --red-dim: rgba(255, 69, 58, 0.1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Helvetica Neue', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 28px 24px 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    box-sizing: border-box;
+  }
+
+  .titlebar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .titlebar-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  h1 {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 2px;
+    letter-spacing: -0.3px;
+  }
+  .theme-toggle {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    cursor: pointer;
+  }
+  .theme-toggle input { display: none; }
+  .theme-toggle .slider {
+    position: absolute;
+    inset: 0;
+    background: var(--surface-2);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    transition: background 0.2s;
+  }
+  .theme-toggle .slider::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .theme-toggle input:checked + .slider::after {
+    transform: translateX(16px);
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 13px;
+    letter-spacing: 0.5px;
+  }
+
+  /* Folder picker */
+  .folder-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 14px;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .folder-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .folder-buttons:has(+ .folder-list:not(:empty)) {
+    margin-bottom: 10px;
+  }
+  .btn-folder {
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  .btn-folder:hover {
+    border-color: var(--muted);
+    background: var(--surface);
+  }
+  .btn-folder.primary {
+    background: var(--accent-dim);
+    color: #fff;
+    border-color: transparent;
+  }
+  .btn-folder.primary:hover {
+    background: var(--accent);
+    color: var(--accent-text);
+  }
+  .folder-section.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+  }
+  .folder-section.drag-over .btn-folder.primary {
+    transform: scale(1.02);
+    box-shadow: 0 0 16px rgba(167, 139, 250, 0.25);
+  }
+  .folder-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .folder-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text);
+    padding: 6px 10px;
+    background: var(--bg);
+    border-radius: 6px;
+    border: 1px solid transparent;
+    transition: border-color 0.15s;
+  }
+  .folder-item:hover { border-color: var(--border); }
+  .folder-item .path {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .folder-item .count {
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .folder-item .remove {
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 4px;
+    border-radius: 3px;
+    transition: all 0.1s;
+  }
+  .folder-item .remove:hover {
+    color: var(--red);
+    background: var(--red-dim);
+  }
+
+  /* Controls */
+  .ml-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .ml-label input[type="checkbox"] {
+    width: 14px; height: 14px;
+    accent-color: var(--muted);
+    border-radius: 3px;
+  }
+  .meta-fields {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .meta-fields label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .meta-fields input[type="text"] {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 5px 10px;
+    font-size: 12px;
+    color: var(--text);
+    width: 130px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .meta-fields input[type="text"]:focus {
+    border-color: var(--muted);
+  }
+  .bottom-bar {
+    flex-shrink: 0;
+    padding: 14px 0 20px;
+  }
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 10px;
+  }
+  .volume-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: var(--muted);
+    user-select: none;
+  }
+  .volume-control input[type="range"] {
+    -webkit-appearance: none;
+    width: 80px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  .volume-control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--muted);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .volume-control input[type="range"]::-webkit-slider-thumb:hover {
+    background: var(--text);
+  }
+  .controls label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .controls input[type="checkbox"] {
+    width: 15px; height: 15px;
+    accent-color: var(--muted);
+    border-radius: 3px;
+  }
+  .spacer { flex: 1; }
+
+  .btn {
+    padding: 9px 22px;
+    border: none;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    letter-spacing: 0.2px;
+  }
+  .btn-primary {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-primary:hover {
+    border-color: var(--muted);
+    background: var(--surface);
+  }
+  .btn-primary:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* Table */
+  .table-wrap {
+    background: var(--surface);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    overflow-y: auto;
+    overflow-x: auto;
+    flex: 1;
+    min-height: 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  th {
+    text-align: left;
+    padding: 10px 12px;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+  }
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(63, 63, 70, 0.5);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr.pending td { color: var(--muted); }
+  tr.done td { color: var(--text); }
+  tr.error td { color: var(--red); }
+  tr.speech td.filename { color: #e8a735; }
+  th.col-warn, td.col-warn {
+    width: 28px;
+    text-align: center;
+    padding: 4px 2px;
+    user-select: none;
+    font-size: 15px;
+  }
+  td.col-warn .warn-icon {
+    position: relative;
+    cursor: default;
+  }
+  td.col-warn .warn-icon::after {
+    content: attr(data-tip);
+    position: fixed;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    border: 1px solid var(--border);
+    z-index: 9999;
+    margin-top: 24px;
+    margin-left: -10px;
+  }
+  td.col-warn .warn-icon:hover::after {
+    opacity: 1;
+  }
+  tr:hover td { background: rgba(255, 255, 255, 0.02); }
+  tr.selected td { background: var(--accent-glow); }
+  th.col-check, td.col-check {
+    width: 32px;
+    text-align: center;
+    padding: 8px 6px;
+    user-select: none;
+  }
+  th.col-check input, td.col-check input {
+    width: 14px; height: 14px;
+    accent-color: var(--muted);
+    cursor: pointer;
+  }
+  th.col-play, td.col-play {
+    width: 28px;
+    text-align: center;
+    padding: 4px 2px;
+    user-select: none;
+  }
+  td.col-play button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 15px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    line-height: 1;
+    opacity: 0.5;
+    transition: opacity 0.15s, color 0.15s;
+  }
+  td.col-play button:hover {
+    opacity: 1;
+    color: var(--text);
+  }
+  td.col-play button.playing {
+    opacity: 1;
+    color: var(--accent, #007aff);
+  }
+  th.col-del, td.col-del {
+    width: 28px;
+    text-align: center;
+    padding: 4px 2px;
+    user-select: none;
+    vertical-align: middle;
+  }
+  th.col-del .btn-clear-list {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    opacity: 0.65;
+    transition: opacity 0.15s, color 0.15s, background 0.15s;
+  }
+  th.col-del .btn-clear-list:hover {
+    opacity: 1;
+    color: var(--text);
+    background: rgba(255, 59, 48, 0.12);
+  }
+  td.col-del button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    line-height: 1;
+    opacity: 0.4;
+    transition: opacity 0.15s, color 0.15s;
+  }
+  td.col-del button:hover {
+    opacity: 1;
+    color: var(--red, #e55);
+  }
+  td.filename {
+    font-weight: 500;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: inherit;
+  }
+  td.tags {
+    max-width: 180px;
+    font-size: 11px;
+  }
+  td[contenteditable="true"] {
+    cursor: text;
+    border-radius: 4px;
+    outline: none;
+    transition: background 0.15s, box-shadow 0.15s;
+  }
+  td[contenteditable="true"]:hover {
+    background: var(--accent-glow);
+  }
+  td[contenteditable="true"]:focus {
+    background: var(--surface);
+    box-shadow: inset 0 0 0 1.5px var(--accent);
+  }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.visible { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 360px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+  .modal p {
+    font-size: 14px;
+    line-height: 1.5;
+    margin-bottom: 20px;
+    color: var(--text);
+  }
+  .modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+  .modal-buttons button {
+    flex: 1;
+    padding: 9px 16px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    transition: all 0.15s;
+  }
+  .modal-buttons .btn-skip {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  .modal-buttons .btn-skip:hover {
+    background: var(--surface);
+    border-color: var(--muted);
+  }
+  .modal-buttons .btn-overwrite {
+    background: var(--accent);
+    color: var(--accent-text);
+    border-color: transparent;
+  }
+  .modal-buttons .btn-overwrite:hover {
+    background: var(--accent-dim);
+  }
+  .modal .btn-cancel {
+    width: 100%;
+    margin-top: 12px;
+    padding: 8px 16px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--muted);
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .modal .btn-cancel:hover {
+    border-color: var(--muted);
+    color: var(--text);
+    background: var(--surface);
+  }
+
+  /* Progress */
+  .progress-bar {
+    width: 100%;
+    height: 3px;
+    background: var(--surface-2);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--muted), var(--border));
+    width: 0%;
+    transition: width 0.3s ease;
+    border-radius: 2px;
+  }
+  .status {
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.2px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="titlebar">
+    <div>
+      <h1>Beat Analyzer</h1>
+      <p class="subtitle">BPM · Key · Genre · Mood · Instruments</p>
+    </div>
+    <div class="titlebar-actions">
+      <label class="theme-toggle" title="Dark / Light Mode">
+        <input type="checkbox" id="themeToggle" onchange="toggleTheme()">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="folder-section" id="folderSection">
+    <div class="folder-buttons">
+      <button class="btn-folder" id="btnAddFile" onclick="pickFiles()">＋ File hinzufügen</button>
+      <button class="btn-folder" id="btnSelect" onclick="pickFolder(false)">📂 Ordner auswählen</button>
+      <button class="btn-folder" id="btnAdd" onclick="pickFolder(true)" style="display:none">＋ Ordner hinzufügen</button>
+      <div class="spacer"></div>
+      <label class="ml-label" title="Ohne Häkchen: nur BPM und Tonart. Mit Häkchen: Genre, Mood, Instrumente (TensorFlow, erster Lauf langsamer).">
+        <input type="checkbox" id="mlToggle" checked>
+        ML-Modelle (Genre, Mood, Instrumente)
+      </label>
+      <button class="btn-folder" id="startBtn" onclick="startAnalysis()" disabled>
+        Analyse starten
+      </button>
+    </div>
+    <div class="folder-list" id="folderList"></div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th class="col-check"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" checked></th>
+          <th class="col-play"></th>
+          <th class="col-warn"></th>
+          <th>Datei</th>
+          <th>BPM</th>
+          <th>Key</th>
+          <th>Genre</th>
+          <th>Mood</th>
+          <th>Instruments</th>
+          <th class="col-del" title="Gesamte Liste leeren">
+            <button type="button" class="btn-clear-list" onclick="clearList()" aria-label="Liste leeren">✕</button>
+          </th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <div id="dropTrigger" style="display:none" data-path="" data-isdir=""></div>
+  <div class="modal-overlay" id="confirmModal" onclick="if (event.target === this) { _confirmResolve('cancel'); }">
+    <div class="modal" onclick="event.stopPropagation();">
+      <p id="confirmMsg"></p>
+      <div class="modal-buttons">
+        <button type="button" class="btn-skip" onclick="_confirmResolve('skip')">Überspringen</button>
+        <button type="button" class="btn-overwrite" onclick="_confirmResolve('overwrite')">Überschreiben</button>
+      </div>
+      <button type="button" class="btn-cancel" onclick="_confirmResolve('cancel')">Abbrechen</button>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <div class="meta-fields">
+      <label>Artist <input type="text" id="artistField" value="David Main"></label>
+      <label>Composer <input type="text" id="composerField" value="David Main"></label>
+      <label title="Wird nicht analysiert — kommt bei „Save Tags“ / „Save Changes“ als URL ins File (WXXX bei MP3).">Instagram.com <input type="text" id="instagramField" value="davidmainmusic" placeholder="Handle ohne @"></label>
+      <div class="spacer"></div>
+      <span style="font-family:'Snell Roundhand','Brush Script MT','Dancing Script',cursive; font-size:17px; font-weight:300; color:var(--muted); letter-spacing:0.5px">by David Main</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="progress-bar" style="flex:1"><div class="progress-fill" id="progressFill"></div></div>
+      <button id="cancelBtn" class="btn-folder" style="display:none;padding:2px 10px;font-size:11px;min-width:auto" onclick="cancelAnalysis()">Abbrechen</button>
+    </div>
+    <div class="status" id="status">Bereit</div>
+    <div class="controls">
+      <div class="volume-control">
+        <span id="volIcon" onclick="toggleMute()">🔊</span>
+        <input type="range" id="volumeSlider" min="0" max="100" value="80" oninput="setVolume(this.value)">
+      </div>
+      <div class="spacer"></div>
+      <button class="btn btn-primary" id="removeTagsBtn" onclick="removeTags()" disabled>
+        Remove Tags
+      </button>
+      <button class="btn btn-primary" id="saveTagsBtn" onclick="saveTags()" disabled>
+        Save Tags
+      </button>
+      <button class="btn btn-primary" id="renameBtn" onclick="renameFiles()" disabled>
+        Rename Files
+      </button>
+      <button class="btn btn-primary" id="saveAllBtn" onclick="saveAll()" disabled>
+        Save Changes
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let folders = [];
+  let allFiles = [];
+  var _sessionRestoreAttempted = false;
+
+  function _fmtAudioFiles(n) {
+    return n === 1 ? '1 Audio-Datei' : n + ' Audio-Dateien';
+  }
+  function _fmtOrdner(n) {
+    return n === 1 ? '1 Ordner' : n + ' Ordner';
+  }
+  function _fmtOrdnerUndAudio(ordnerCount, audioCount) {
+    return _fmtOrdner(ordnerCount) + ', ' + _fmtAudioFiles(audioCount);
+  }
+  function _fmtFilesInFolder(n) {
+    return n === 1 ? '1 Datei' : n + ' Dateien';
+  }
+
+  async function _persistSession() {
+    try {
+      if (typeof pywebview === 'undefined' || !pywebview.api || !pywebview.api.save_session) return;
+      await pywebview.api.save_session(
+        JSON.stringify(folders),
+        JSON.stringify(allFiles.map(_filePath))
+      );
+    } catch (e) {}
+  }
+
+  // Drop polling — must be first, self-contained IIFE
+  (function() {
+    var started = false;
+    function tryStart() {
+      if (started) return;
+      try {
+        if (typeof pywebview === 'undefined' || !pywebview.api) return;
+      } catch(e) { return; }
+      started = true;
+      setInterval(async function() {
+        try {
+          var drops = await pywebview.api.get_pending_drops();
+          if (drops && drops.length > 0) {
+            for (var i = 0; i < drops.length; i++) {
+              var drop = drops[i];
+              if (drop.is_dir) {
+                await addFolder(drop.path);
+              } else {
+                await addDroppedFiles([drop.path]);
+              }
+            }
+          }
+        } catch(e) {
+          try { document.getElementById('status').textContent = 'Poll: ' + e; } catch(x) {}
+        }
+      }, 400);
+    }
+    setInterval(tryStart, 500);
+  })();
+
+  // Theme — persisted via Python API to survive app restarts
+  (function() {
+    function applyTheme(theme) {
+      var isDark = theme === 'dark';
+      document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+      document.getElementById('themeToggle').checked = isDark;
+    }
+    function tryLoad() {
+      try {
+        if (typeof pywebview === 'undefined' || !pywebview.api) return;
+      } catch(e) { return; }
+      clearInterval(themeTimer);
+      pywebview.api.get_theme().then(function(t) {
+        if (t) applyTheme(t);
+      });
+    }
+    var sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(sysDark ? 'dark' : 'light');
+    var themeTimer = setInterval(tryLoad, 300);
+  })();
+
+  // Letzte Session beim App-Start wiederherstellen (Ordner + Einzeldateien)
+  (function() {
+    function tryRestore() {
+      if (_sessionRestoreAttempted) return;
+      try {
+        if (typeof pywebview === 'undefined' || !pywebview.api || !pywebview.api.get_session) return;
+      } catch (e) { return; }
+      _sessionRestoreAttempted = true;
+      clearInterval(sessionTimer);
+      pywebview.api.get_session().then(async function(sess) {
+        try {
+          if (!sess) return;
+          var hasF = sess.folders && sess.folders.length;
+          var hasFi = sess.files && sess.files.length;
+          if (!hasF && !hasFi) return;
+          document.getElementById('status').textContent = 'Letzte Session wird geladen...';
+          var flist = sess.folders || [];
+          for (var i = 0; i < flist.length; i++) {
+            await addFolder(flist[i]);
+          }
+          var loaded = new Set(allFiles.map(_filePath));
+          var missing = (sess.files || []).filter(function(p) { return !loaded.has(p); });
+          if (missing.length > 0) {
+            await addDroppedFiles(missing);
+          }
+          await _persistSession();
+        } catch (e) {
+          try {
+            document.getElementById('status').textContent = 'Session laden: ' + e;
+          } catch (x) {}
+        }
+      });
+    }
+    var sessionTimer = setInterval(tryRestore, 300);
+  })();
+
+  function toggleTheme() {
+    var dark = document.getElementById('themeToggle').checked;
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    pywebview.api.set_theme(dark ? 'dark' : 'light');
+  }
+
+  document.addEventListener('keydown', function(e) {
+    var cModal = document.getElementById('confirmModal');
+    if (cModal && cModal.classList.contains('visible') && e.key === 'Escape') {
+      e.preventDefault();
+      _confirmResolve('cancel');
+      return;
+    }
+  });
+
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop', e => e.preventDefault());
+
+  async function pickFolder(isAdd) {
+    document.getElementById('status').textContent = 'Ordner wird gewählt...';
+    try {
+      const folder = await pywebview.api.pick_folder();
+      if (folder) {
+        if (!isAdd) { folders = []; allFiles = []; }
+        addFolder(folder);
+      } else {
+        document.getElementById('status').textContent = folders.length
+          ? _fmtOrdnerUndAudio(folders.length, allFiles.length)
+          : 'Bereit';
+      }
+    } catch(e) {
+      document.getElementById('status').textContent = 'Fehler: ' + e;
+    }
+  }
+
+  function setFolder(folder) { addFolder(folder); }
+
+  function _filePath(f) {
+    var p = f.path || (f.folder + '/' + f.name);
+    return p.replace(/[/]+$/, '');
+  }
+
+  function _existingPaths() {
+    var s = new Set();
+    allFiles.forEach(function(f) { s.add(_filePath(f)); });
+    return s;
+  }
+
+  function _dedup(newFiles) {
+    var existing = _existingPaths();
+    var unique = [], skipped = 0;
+    newFiles.forEach(function(f) {
+      var p = _filePath(f);
+      if (existing.has(p)) { skipped++; } else { unique.push(f); existing.add(p); }
+    });
+    return { files: unique, skipped: skipped };
+  }
+
+  /** Sicherstellen, dass Tag-Spalten Strings sind (pywebview/JSON liefert sonst leere Zellen). */
+  function _normalizeFileRow(f) {
+    if (!f) return f;
+    ['bpm', 'key', 'genre', 'mood', 'instruments'].forEach(function(k) {
+      var v = f[k];
+      f[k] = (v === undefined || v === null) ? '' : String(v);
+    });
+    f._hadGenreMoodInstrOnDisk = f.hadGenreMoodInstrOnDisk === true;
+    delete f.hadGenreMoodInstrOnDisk;
+    return f;
+  }
+
+  function _enableActionButtons() {
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('saveTagsBtn').disabled = false;
+    document.getElementById('renameBtn').disabled = false;
+    document.getElementById('saveAllBtn').disabled = false;
+    document.getElementById('removeTagsBtn').disabled = false;
+  }
+
+  async function addDroppedFiles(paths) {
+    var raw = await pywebview.api.get_file_info(JSON.stringify(paths));
+    var res = _dedup(raw);
+    if (res.files.length === 0) {
+      document.getElementById('status').textContent = res.skipped + ' Datei(en) bereits in der Liste – übersprungen.';
+      await _persistSession();
+      return;
+    }
+    res.files.forEach(_normalizeFileRow);
+    const offset = allFiles.length;
+    res.files.forEach((f, i) => { f.globalIndex = offset + i; });
+    allFiles = allFiles.concat(res.files);
+    renderFileTable();
+    _enableActionButtons();
+    var msg = _fmtAudioFiles(allFiles.length);
+    if (res.skipped > 0) msg += ' (' + res.skipped + ' Duplikat' + (res.skipped > 1 ? 'e' : '') + ' übersprungen)';
+    document.getElementById('status').textContent = msg;
+    await _persistSession();
+  }
+
+  async function pickFiles() {
+    document.getElementById('status').textContent = 'Dateien werden gewählt...';
+    try {
+      const paths = await pywebview.api.pick_files();
+      if (paths && paths.length > 0) {
+        var raw = await pywebview.api.get_file_info(JSON.stringify(paths));
+        var res = _dedup(raw);
+        if (res.files.length === 0) { document.getElementById('status').textContent = res.skipped + ' Datei(en) bereits in der Liste – übersprungen.'; return; }
+        res.files.forEach(_normalizeFileRow);
+        const offset = allFiles.length;
+        res.files.forEach((f, i) => { f.globalIndex = offset + i; });
+        allFiles = allFiles.concat(res.files);
+        renderFileTable();
+        _enableActionButtons();
+        var msg = _fmtAudioFiles(allFiles.length);
+        if (res.skipped > 0) msg += ' (' + res.skipped + ' Duplikat' + (res.skipped > 1 ? 'e' : '') + ' übersprungen)';
+        document.getElementById('status').textContent = msg;
+        await _persistSession();
+      } else {
+        document.getElementById('status').textContent = allFiles.length
+          ? _fmtAudioFiles(allFiles.length) : 'Bereit';
+      }
+    } catch(e) {
+      document.getElementById('status').textContent = 'Fehler: ' + e;
+    }
+  }
+
+  async function addFolder(folder) {
+    if (folders.includes(folder)) {
+      document.getElementById('status').textContent = 'Ordner bereits hinzugefügt';
+      return;
+    }
+    folders.push(folder);
+    document.getElementById('status').textContent = 'Lade Dateien...';
+
+    var raw = await pywebview.api.list_files(folder);
+    var res = _dedup(raw);
+    if (res.files.length === 0) {
+      document.getElementById('status').textContent = res.skipped + ' Datei(en) bereits in der Liste – übersprungen.';
+      await _persistSession();
+      return;
+    }
+    res.files.forEach(_normalizeFileRow);
+    const offset = allFiles.length;
+    res.files.forEach((f, i) => { f.globalIndex = offset + i; });
+    allFiles = allFiles.concat(res.files);
+
+    renderFolderList();
+    renderFileTable();
+
+    document.getElementById('btnAdd').style.display = '';
+    _enableActionButtons();
+    var msg = _fmtOrdnerUndAudio(folders.length, allFiles.length);
+    if (res.skipped > 0) msg += ' (' + res.skipped + ' Duplikat' + (res.skipped > 1 ? 'e' : '') + ' übersprungen)';
+    document.getElementById('status').textContent = msg;
+    await _persistSession();
+  }
+
+  function removeFolder(idx) {
+    const removed = folders[idx];
+    folders.splice(idx, 1);
+    allFiles = allFiles.filter(f => f.folder !== removed);
+    allFiles.forEach((f, i) => { f.globalIndex = i; });
+    renderFolderList();
+    renderFileTable();
+    _updateButtonVisibility();
+    void _persistSession();
+  }
+
+  function clearList() {
+    if (_currentAudio) { _currentAudio.pause(); _currentAudio = null; _currentPlayIdx = -1; }
+    folders = [];
+    allFiles = [];
+    document.getElementById('folderList').innerHTML = '';
+    document.getElementById('tableBody').innerHTML = '';
+    document.getElementById('progressFill').style.width = '0%';
+    _updateButtonVisibility();
+    void _persistSession();
+  }
+
+  function _updateButtonVisibility() {
+    const hasItems = folders.length > 0;
+    document.getElementById('btnAdd').style.display = hasItems ? '' : 'none';
+    document.getElementById('startBtn').disabled = !hasItems;
+    document.getElementById('status').textContent = hasItems
+      ? _fmtOrdnerUndAudio(folders.length, allFiles.length)
+      : 'Bereit';
+  }
+
+  function renderFolderList() {
+    const list = document.getElementById('folderList');
+    list.innerHTML = '';
+    folders.forEach((f, i) => {
+      const count = allFiles.filter(af => af.folder === f).length;
+      const div = document.createElement('div');
+      div.className = 'folder-item';
+      div.innerHTML =
+        '<span class="path">📁 ' + f.split('/').pop() + '</span>' +
+        '<span class="count">' + _fmtFilesInFolder(count) + '</span>' +
+        '<span class="remove" onclick="removeFolder(' + i + ')" title="Entfernen">✕</span>';
+      list.appendChild(div);
+    });
+  }
+
+  function _e(val) { return (val || '').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+  function _checkboxCell(idx) {
+    return '<td class="col-check"><input type="checkbox" checked onchange="toggleRowSelect(' + idx + ', this)"></td>';
+  }
+
+  function _playCell(idx) {
+    return '<td class="col-play"><button id="playbtn-' + idx + '" onclick="togglePlay(' + idx + ')" title="Abspielen">▶</button></td>';
+  }
+
+  function _deleteCell(idx) {
+    return '<td class="col-del"><button onclick="removeFile(' + idx + ')" title="Entfernen">✕</button></td>';
+  }
+
+  var _currentAudio = null;
+  var _currentPlayIdx = -1;
+  var _audioPort = __AUDIO_PORT__;
+
+  function togglePlay(idx) {
+    var f = allFiles.find(function(x) { return x.globalIndex === idx; });
+    if (!f) return;
+    var filePath = f.path || (f.folder + '/' + f.name);
+
+    if (_currentPlayIdx === idx && _currentAudio && !_currentAudio.paused) {
+      _currentAudio.pause();
+      _setPlayBtn(idx, false);
+      return;
+    }
+
+    if (_currentAudio) {
+      _currentAudio.pause();
+      _setPlayBtn(_currentPlayIdx, false);
+    }
+
+    var url = 'http://127.0.0.1:' + _audioPort + '/' + encodeURIComponent(filePath);
+    _currentAudio = new Audio(url);
+    _currentAudio.volume = _volume;
+    _currentPlayIdx = idx;
+    _setPlayBtn(idx, true);
+    _currentAudio.play().catch(function(e) {
+      console.error('Play error:', e);
+      _setPlayBtn(idx, false);
+    });
+    _currentAudio.onended = function() { _setPlayBtn(idx, false); _currentPlayIdx = -1; };
+  }
+
+  function _setPlayBtn(idx, playing) {
+    var btn = document.getElementById('playbtn-' + idx);
+    if (!btn) return;
+    btn.textContent = playing ? '⏸' : '▶';
+    btn.classList.toggle('playing', playing);
+  }
+
+  var _volume = 0.8;
+  var _muted = false;
+  var _premuteVol = 0.8;
+
+  function setVolume(val) {
+    _volume = val / 100;
+    _muted = _volume === 0;
+    if (_currentAudio) _currentAudio.volume = _volume;
+    _updateVolIcon();
+  }
+
+  function toggleMute() {
+    if (_muted) {
+      _muted = false;
+      _volume = _premuteVol || 0.8;
+    } else {
+      _premuteVol = _volume;
+      _muted = true;
+      _volume = 0;
+    }
+    document.getElementById('volumeSlider').value = _volume * 100;
+    if (_currentAudio) _currentAudio.volume = _volume;
+    _updateVolIcon();
+  }
+
+  function _updateVolIcon() {
+    var icon = _volume === 0 ? '🔇' : _volume < 0.4 ? '🔈' : _volume < 0.7 ? '🔉' : '🔊';
+    document.getElementById('volIcon').textContent = icon;
+  }
+
+  function _warnCell(isSpeech) {
+    return '<td class="col-warn">' + (isSpeech ? '<span class="warn-icon" data-tip="Sprache erkannt – kein Musikstück">⚠️</span>' : '') + '</td>';
+  }
+
+  function _editableCells(idx, name, bpm, key, genre, mood, instruments, isSpeech) {
+    return _checkboxCell(idx) +
+      _playCell(idx) +
+      _warnCell(isSpeech) +
+      '<td class="filename" contenteditable="true" data-tag="filename">' + _e(name || '') + '</td>' +
+      '<td contenteditable="true" data-tag="bpm">' + _e(bpm || '') + '</td>' +
+      '<td contenteditable="true" data-tag="key">' + _e(key || '') + '</td>' +
+      '<td class="tags" contenteditable="true" data-tag="genre">' + _e(genre || '') + '</td>' +
+      '<td class="tags" contenteditable="true" data-tag="mood">' + _e(mood || '') + '</td>' +
+      '<td class="tags" contenteditable="true" data-tag="instruments">' + _e(instruments || '') + '</td>' +
+      _deleteCell(idx);
+  }
+
+  function renderFileTable() {
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+    allFiles.forEach((f, i) => {
+      f._selected = f._selected !== undefined ? f._selected : true;
+      const hasTags = f.bpm || f.key || f.genre || f.mood || f.instruments;
+      const tr = document.createElement('tr');
+      var cls = hasTags ? 'done' : 'pending';
+      if (f._isSpeech) cls += ' speech';
+      if (f._selected) cls += ' selected';
+      tr.className = cls;
+      tr.id = 'row-' + f.globalIndex;
+      tr.innerHTML = _editableCells(f.globalIndex, f.name, f.bpm, f.key, f.genre, f.mood, f.instruments, f._isSpeech);
+      const cb = tr.querySelector('.col-check input');
+      if (cb) cb.checked = f._selected;
+      tbody.appendChild(tr);
+    });
+    _syncSelectAll();
+  }
+
+  function toggleRowSelect(idx, cb) {
+    const f = allFiles.find(f => f.globalIndex === idx);
+    if (f) f._selected = cb.checked;
+    const tr = document.getElementById('row-' + idx);
+    if (tr) tr.classList.toggle('selected', cb.checked);
+    _syncSelectAll();
+  }
+
+  function toggleSelectAll() {
+    const checked = document.getElementById('selectAll').checked;
+    allFiles.forEach(f => { f._selected = checked; });
+    document.querySelectorAll('#tableBody .col-check input').forEach(cb => { cb.checked = checked; });
+    document.querySelectorAll('#tableBody tr').forEach(tr => { tr.classList.toggle('selected', checked); });
+  }
+
+  function _syncSelectAll() {
+    const all = allFiles.length > 0 && allFiles.every(f => f._selected);
+    document.getElementById('selectAll').checked = all;
+  }
+
+  function removeFile(idx) {
+    if (_currentPlayIdx === idx && _currentAudio) {
+      _currentAudio.pause();
+      _currentAudio = null;
+      _currentPlayIdx = -1;
+    }
+    allFiles = allFiles.filter(f => f.globalIndex !== idx);
+    const tr = document.getElementById('row-' + idx);
+    if (tr) tr.remove();
+    _syncSelectAll();
+    if (allFiles.length === 0) {
+      document.getElementById('startBtn').disabled = true;
+      document.getElementById('saveTagsBtn').disabled = true;
+      document.getElementById('renameBtn').disabled = true;
+      document.getElementById('saveAllBtn').disabled = true;
+      document.getElementById('removeTagsBtn').disabled = true;
+    }
+    void _persistSession();
+  }
+
+  function _selectedPaths() {
+    return allFiles.filter(f => f._selected).map(f => f.path || (f.folder + '/' + f.name));
+  }
+
+  var _confirmResolve = function() {};
+
+  /**
+   * Warnung nur, wenn Genre/Mood/Instrumente schon in der Datei standen (beim Laden).
+   * Nach der Analyse stehen ML-Werte in der Tabelle — ohne dieses Flag wäre das ein falscher Alarm.
+   */
+  function _hasTags(f) {
+    if (f._hadGenreMoodInstrOnDisk !== true) return false;
+    var g = (f.genre != null && String(f.genre).trim()) ? String(f.genre).trim() : '';
+    var m = (f.mood != null && String(f.mood).trim()) ? String(f.mood).trim() : '';
+    var i = (f.instruments != null && String(f.instruments).trim()) ? String(f.instruments).trim() : '';
+    return !!(g || m || i);
+  }
+
+  function _confirmOverwrite() {
+    const selected = allFiles.filter(f => f._selected);
+    const withTags = selected.filter(_hasTags);
+    if (withTags.length === 0) return Promise.resolve('overwrite');
+    return new Promise(function(resolve) {
+      document.getElementById('confirmMsg').textContent =
+        withTags.length + ' von ' + selected.length + ' ausgewählten Dateien hatten beim Laden schon Genre, Mood oder Instrumente in der Datei — diese Einträge werden ersetzt.';
+      document.getElementById('confirmModal').classList.add('visible');
+      _confirmResolve = function(result) {
+        document.getElementById('confirmModal').classList.remove('visible');
+        resolve(result);
+      };
+    });
+  }
+
+  function _confirmSpeech(items) {
+    var speechFiles = items.filter(f => f._isSpeech);
+    if (speechFiles.length === 0) return Promise.resolve('overwrite');
+    return new Promise(function(resolve) {
+      document.getElementById('confirmMsg').textContent =
+        speechFiles.length + ' Datei(en) wurden als Sprache erkannt. Trotzdem speichern?';
+      document.getElementById('confirmModal').classList.add('visible');
+      _confirmResolve = function(result) {
+        document.getElementById('confirmModal').classList.remove('visible');
+        resolve(result);
+      };
+    });
+  }
+
+  function _getSelectedItems(mode) {
+    var selected = allFiles.filter(f => f._selected);
+    if (mode === 'skip') {
+      selected = selected.filter(f => !_hasTags(f));
+    }
+    return selected;
+  }
+
+  async function startAnalysis() {
+    const allSelected = allFiles.filter(f => f._selected);
+    if (allSelected.length === 0) return;
+    const mode = await _confirmOverwrite();
+    if (mode === 'cancel') return;
+    const selected = _getSelectedItems(mode);
+    if (selected.length === 0) { document.getElementById('status').textContent = 'Keine Dateien ohne Tags.'; return; }
+    document.getElementById('startBtn').disabled = true;
+    var cb = document.getElementById('cancelBtn');
+    cb.style.display = ''; cb.disabled = false;
+    const useML = document.getElementById('mlToggle').checked;
+    document.getElementById('status').textContent = 'Analyse läuft...';
+    const items = selected.map(f => ({
+      path: f.path || (f.folder + '/' + f.name),
+      idx: f.globalIndex
+    }));
+    pywebview.api.start_analysis(JSON.stringify(items), useML).catch(function(e) {
+      document.getElementById('status').textContent = 'Analyse: ' + e;
+      analysisComplete();
+    });
+  }
+
+  /** Zeilen-Daten als Base64-JSON (Python sendet kurzes JS + kompakte Nutzlast). */
+  /** Tabellenzelle aus Python-Payload (kein || — sonst würde z. B. 0 oder \"0\" falsch behandelt). */
+  function _cellStr(v) {
+    if (v === null || v === undefined) return '';
+    return String(v);
+  }
+
+  function __beatsApplyRow(idx, b64, isError, isSpeech) {
+    try {
+      var bin = atob(b64);
+      var u8 = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      var jsonStr = new TextDecoder('utf-8').decode(u8);
+      updateRow(idx, JSON.parse(jsonStr), isError, isSpeech);
+    } catch (e) {
+      console.error('__beatsApplyRow', e);
+    }
+  }
+
+  function updateRow(index, data, isError, isSpeech) {
+    data = Array.isArray(data) ? data.slice() : [];
+    while (data.length < 6) data.push('');
+    const tr = document.getElementById('row-' + index);
+    if (!tr) return;
+    const f = allFiles.find(f => f.globalIndex === index);
+    const sel = f ? f._selected : true;
+    if (f) {
+      f._isSpeech = !!isSpeech;
+      if (!isError) {
+        f.name = (data[0] !== undefined && data[0] !== null && data[0] !== '') ? String(data[0]) : f.name;
+        f.bpm = _cellStr(data[1]);
+        f.key = _cellStr(data[2]);
+        f.genre = _cellStr(data[3]);
+        f.mood = _cellStr(data[4]);
+        f.instruments = _cellStr(data[5]);
+      }
+    }
+    var cls = isError ? 'error' : 'done';
+    if (isSpeech) cls += ' speech';
+    if (sel) cls += ' selected';
+    tr.className = cls;
+    if (isError) {
+      tr.innerHTML = _checkboxCell(index) +
+        _playCell(index) +
+        _warnCell(isSpeech) +
+        '<td class="filename">' + _e(data[0]) + '</td>' +
+        '<td>' + _e(_cellStr(data[1])) + '</td><td>' + _e(_cellStr(data[2])) + '</td>' +
+        '<td class="tags">' + _e(_cellStr(data[3])) + '</td>' +
+        '<td class="tags">' + _e(_cellStr(data[4])) + '</td>' +
+        '<td class="tags">' + _e(_cellStr(data[5])) + '</td>' +
+        _deleteCell(index);
+    } else {
+      tr.innerHTML = _editableCells(index, data[0], _cellStr(data[1]), _cellStr(data[2]), _cellStr(data[3]), _cellStr(data[4]), _cellStr(data[5]), isSpeech);
+    }
+    const cb = tr.querySelector('.col-check input');
+    if (cb) cb.checked = sel;
+  }
+
+  function setProgress(pct) {
+    document.getElementById('progressFill').style.width = pct + '%';
+  }
+
+  async function cancelAnalysis() {
+    document.getElementById('cancelBtn').disabled = true;
+    await pywebview.api.cancel_analysis();
+  }
+
+  function setStatus(text) {
+    document.getElementById('status').textContent = text;
+  }
+
+  function analysisComplete() {
+    _enableActionButtons();
+    document.getElementById('cancelBtn').style.display = 'none';
+  }
+
+  function updateFilename(oldName, newName) {
+    const rows = document.querySelectorAll('#tableBody tr');
+    for (const tr of rows) {
+      const td = tr.querySelector('td.filename');
+      if (td && td.textContent === oldName) {
+        td.textContent = newName;
+        const f = allFiles.find(f => f.name === oldName);
+        if (f) {
+          f.path = f.path.replace(oldName, newName);
+          f.name = newName;
+        }
+        void _persistSession();
+        break;
+      }
+    }
+  }
+
+  function _collectEdits() {
+    const edits = {};
+    const rows = document.querySelectorAll('#tableBody tr');
+    rows.forEach((tr) => {
+      var rid = tr.id || '';
+      if (rid.indexOf('row-') !== 0) return;
+      var idx = parseInt(rid.slice(4), 10);
+      if (!Number.isFinite(idx)) return;
+      const f = allFiles.find(x => x.globalIndex === idx);
+      if (!f) return;
+      const path = f.path || (f.folder + '/' + f.name);
+      const cells = tr.querySelectorAll('td[data-tag]');
+      const vals = {};
+      cells.forEach(td => { vals[td.dataset.tag] = td.textContent.trim(); });
+      edits[path] = vals;
+    });
+    return edits;
+  }
+
+  function _applyFilenameEdits(edits) {
+    allFiles.forEach(f => {
+      const path = f.path || (f.folder + '/' + f.name);
+      const e = edits[path];
+      if (e && e.filename && e.filename !== f.name) {
+        f.name = e.filename;
+        f.path = f.folder + '/' + e.filename;
+      }
+    });
+  }
+
+  function _getMeta() {
+    var handle = document.getElementById('instagramField').value.trim();
+    return {
+      artist: document.getElementById('artistField').value.trim(),
+      composer: document.getElementById('composerField').value.trim(),
+      instagram: handle ? 'instagram.com/' + handle : ''
+    };
+  }
+
+  async function saveTags() {
+    const allSelected = allFiles.filter(f => f._selected);
+    if (allSelected.length === 0) return;
+    const mode = await _confirmOverwrite();
+    if (mode === 'cancel') return;
+    var selected = _getSelectedItems(mode);
+    if (selected.length === 0) { document.getElementById('status').textContent = 'Keine Dateien ohne Tags.'; return; }
+    var speechMode = await _confirmSpeech(selected);
+    if (speechMode === 'cancel') return;
+    if (speechMode === 'skip') selected = selected.filter(f => !f._isSpeech);
+    if (selected.length === 0) { document.getElementById('status').textContent = 'Keine Dateien zum Speichern.'; return; }
+    const paths = selected.map(f => f.path || (f.folder + '/' + f.name));
+    document.getElementById('saveTagsBtn').disabled = true;
+    document.getElementById('status').textContent = 'Tags werden geschrieben...';
+    const edits = _collectEdits();
+    await pywebview.api.save_tags(JSON.stringify(paths), JSON.stringify(edits), JSON.stringify(_getMeta()));
+  }
+
+  async function renameFiles() {
+    var selected = allFiles.filter(f => f._selected);
+    if (selected.length === 0) return;
+    var speechMode = await _confirmSpeech(selected);
+    if (speechMode === 'cancel') return;
+    if (speechMode === 'skip') selected = selected.filter(f => !f._isSpeech);
+    if (selected.length === 0) { document.getElementById('status').textContent = 'Keine Dateien zum Umbenennen.'; return; }
+    const paths = selected.map(f => f.path || (f.folder + '/' + f.name));
+    document.getElementById('renameBtn').disabled = true;
+    document.getElementById('status').textContent = 'Dateien werden umbenannt...';
+    const edits = _collectEdits();
+    await pywebview.api.rename_files(JSON.stringify(paths), JSON.stringify(edits));
+  }
+
+  async function saveAll() {
+    const allSelected = allFiles.filter(f => f._selected);
+    if (allSelected.length === 0) return;
+    const mode = await _confirmOverwrite();
+    if (mode === 'cancel') return;
+    var selected = _getSelectedItems(mode);
+    if (selected.length === 0) { document.getElementById('status').textContent = 'Keine Dateien ohne Tags.'; return; }
+    var speechMode = await _confirmSpeech(selected);
+    if (speechMode === 'cancel') return;
+    if (speechMode === 'skip') selected = selected.filter(f => !f._isSpeech);
+    if (selected.length === 0) { document.getElementById('status').textContent = 'Keine Dateien zum Speichern.'; return; }
+    const paths = selected.map(f => f.path || (f.folder + '/' + f.name));
+    document.getElementById('saveAllBtn').disabled = true;
+    document.getElementById('saveTagsBtn').disabled = true;
+    document.getElementById('renameBtn').disabled = true;
+    document.getElementById('status').textContent = 'Speichere Tags & benenne um...';
+    const edits = _collectEdits();
+    await pywebview.api.save_all(JSON.stringify(paths), JSON.stringify(edits), JSON.stringify(_getMeta()));
+  }
+
+  async function removeTags() {
+    const selected = allFiles.filter(f => f._selected);
+    if (selected.length === 0) return;
+    const paths = selected.map(f => f.path || (f.folder + '/' + f.name));
+    document.getElementById('removeTagsBtn').disabled = true;
+    document.getElementById('status').textContent = 'Tags werden entfernt...';
+    await pywebview.api.remove_tags(JSON.stringify(paths));
+    selected.forEach(f => {
+      f.bpm = ''; f.key = ''; f.genre = ''; f.mood = ''; f.instruments = '';
+      f._hadGenreMoodInstrOnDisk = false;
+      var tr = document.getElementById('row-' + f.globalIndex);
+      if (tr) {
+        tr.innerHTML = _editableCells(f.globalIndex, f.name, '', '', '', '', '');
+        tr.className = 'pending' + (f._selected ? ' selected' : '');
+        var cb = tr.querySelector('.col-check input');
+        if (cb) cb.checked = f._selected;
+      }
+    });
+    _enableActionButtons();
+  }
+</script>
+</body>
+</html>
